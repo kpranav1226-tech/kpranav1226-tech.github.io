@@ -1,0 +1,47 @@
+name: Publish portfolio
+
+# Pulls the portfolio from its source site and publishes it to GitHub Pages.
+# Change SOURCE below if the portfolio's source address ever changes.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-portfolio
+  cancel-in-progress: false
+
+env:
+  SOURCE: https://k-pranav-digital-world-l65015.freebuff.site/
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the portfolio
+        run: |
+          mkdir -p site
+          wget --quiet --mirror --page-requisites --no-parent \
+            --no-host-directories --directory-prefix=site \
+            --reject-regex '/api/' \
+            "$SOURCE"
+          ls -la site
+
+      - name: Prepare files for Pages
+        run: |
+          # The owner-only editing control needs a server, which Pages does not have.
+          sed -i 's#</head>#<style>.owner-link{display:none !important}</style></head>#' site/index.html
+          touch site/.nojekyll
+          test -f site/index.html
+
+      - name: Publish to the gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages
+          force_orphan: true
