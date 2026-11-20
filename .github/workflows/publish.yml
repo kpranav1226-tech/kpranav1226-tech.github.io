@@ -9,17 +9,19 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
-  group: publish-portfolio
+  group: pages
   cancel-in-progress: false
 
 env:
   SOURCE: https://k-pranav-digital-world-l65015.freebuff.site/
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Download the portfolio
@@ -27,21 +29,19 @@ jobs:
           mkdir -p site
           wget --quiet --mirror --page-requisites --no-parent \
             --no-host-directories --directory-prefix=site \
-            --reject-regex '/api/' \
-            "$SOURCE"
-          ls -la site
-
-      - name: Prepare files for Pages
-        run: |
+            --reject-regex '/api/' "$SOURCE"
+          wget --quiet "${SOURCE}og.svg" -O site/og.svg || true
           # The owner-only editing control needs a server, which Pages does not have.
           sed -i 's#</head>#<style>.owner-link{display:none !important}</style></head>#' site/index.html
           touch site/.nojekyll
+          ls -la site
           test -f site/index.html
 
-      - name: Publish to the gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          publish_branch: gh-pages
-          force_orphan: true
+          path: ./site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
