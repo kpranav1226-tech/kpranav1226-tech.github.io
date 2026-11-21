@@ -169,7 +169,7 @@ function SceneFx({ scene }: { scene: Scene }) {
 }
 
 /** One hand-off between two paintings, measured from the incoming section. */
-type Boundary = { from: string; to: string; section: HTMLElement; p: number }
+type Boundary = { from: string; to: string; section: HTMLElement; p: number; target: number }
 
 export function SceneFlow({ onReady }: { onReady?: () => void }) {
   const flowRef = useRef<HTMLDivElement>(null)
@@ -180,7 +180,7 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
 
   const motes = useMemo<Mote[]>(
     () =>
-      Array.from({ length: 20 }, (_, index) => {
+      Array.from({ length: 12 }, (_, index) => {
         const seed = (index * 47 + 13) % 101
         return {
           left: (seed / 101) * 100,
@@ -203,13 +203,15 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const sceneById = new Map(SCENES.map((scene) => [scene.id, scene]))
     const ratios = new Map<string, number>([[SCENES[0].id, 1392 / 752]])
+    // Cached so the per-frame path never has to ask the browser for layout.
+    const view = { width: flow.clientWidth, height: flow.clientHeight }
 
     /** Size the cover frame to the painting so effects sit on the artwork. */
     const fitFrame = (layer: HTMLDivElement) => {
       const frameEl = layer.querySelector('.scene-frame') as HTMLDivElement | null
       if (!frameEl) return
-      const viewWidth = flow.clientWidth
-      const viewHeight = flow.clientHeight
+      const viewWidth = view.width
+      const viewHeight = view.height
       const id = layer.dataset.scene || 'home'
       const ratio = ratios.get(id) || 1392 / 752
       let width = viewWidth
@@ -226,9 +228,10 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
       frameEl.style.transform = `translate3d(${-((width - viewWidth) * position[0])}px, ${-((height - viewHeight) * position[1])}px, 0)`
     }
 
-    // Every painting is fetched and decoded up front, so a hand-off is a
-    // compositor move rather than a load. The page loader covers the first one.
-    SCENES.forEach((scene) => {
+    // The first painting is needed for the hand-off out of the loader, so it is
+    // fetched right away. The rest are warmed one at a time once the page is
+    // idle, so decoding five large images never competes with the first scroll.
+    const warm = (scene: Scene) => {
       const preload = new Image()
       const settle = () => {
         if (!preload.naturalWidth || !preload.naturalHeight) return
@@ -239,6 +242,13 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
       preload.src = scene.src
       if (preload.complete) settle()
       if (typeof preload.decode === 'function') preload.decode().catch(() => undefined)
+    }
+    warm(SCENES[0])
+    SCENES.slice(1).forEach((scene, index) => {
+      const run = () => warm(scene)
+      const idle = window.requestIdleCallback
+      if (typeof idle === 'function') idle(run, { timeout: 2500 })
+      else window.setTimeout(run, 500 + index * 350)
     })
 
     /* ------------------------------------------------ scene boundaries */
@@ -246,9 +256,6 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
     const sectionEls = Object.keys(SECTION_SCENE)
       .map((id) => document.getElementById(id))
       .filter((element): element is HTMLElement => Boolean(element))
-      .sort(
-        (a, b) => a.getBoundingClientRect().top + window.scrollY - (b.getBoundingClientRect().top + window.scrollY),
-      )
 
     const boundaries: Boundary[] = []
     sectionEls.forEach((element, index) => {
@@ -257,12 +264,23 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
       const previousScene = SECTION_SCENE[previous.id]
       const scene = SECTION_SCENE[element.id]
       if (!scene || scene === previousScene) return
-      boundaries.push({ from: previousScene, to: scene, section: element, p: 0 })
+      boundaries.push({ from: previousScene, to: scene, section: element, p: 0, target: 0 })
     })
 
     const slot = { out: 0, in: 1 }
     let pairIndex = 0
     let activeSection = 'home'
+    let shift = 0
+    let shiftTarget = 0
+
+    // Section offsets are measured on load and on resize, never while scrolling.
+    const tops = new Map<string, { top: number; height: number }>()
+    const measureSections = () => {
+      sectionEls.forEach((element) => {
+        const rect = element.getBoundingClientRect()
+        tops.set(element.id, { top: rect.top + window.scrollY, height: rect.height })
+      })
+    }
 
     const setLayerScene = (index: number, id: string) => {
       const scene = sceneById.get(id)
@@ -290,38 +308,28 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
       if (layers[slot.in].dataset.scene !== boundary.to) setLayerScene(slot.in, boundary.to)
     }
 
+    // Chosen from the live scroll position, not the eased value, so a fast
+    // flick still lands on the right painting.
     const activeIndex = () => {
       let index = 0
       for (let cursor = 0; cursor < boundaries.length; cursor += 1) {
-        if (boundaries[cursor].p > 0.001) index = cursor
+        if (boundaries[cursor].target > 0.001) index = cursor
       }
       return index
     }
 
-    const shiftPx = () => {
-      const section = document.getElementById(activeSection)
-      if (!section) return 0
-      const rect = section.getBoundingClientRect()
-      const progress = (window.innerHeight * 0.5 - rect.top) / Math.max(1, rect.height)
-      const clamped = Math.max(0, Math.min(1, progress))
-      return Math.round((clamped - 0.5) * 54)
-    }
-
-    const render = () => {
+    const paint = () => {
       if (!boundaries.length) return
       const index = activeIndex()
       if (index !== pairIndex) ensurePair(index)
       const p = Math.max(0, Math.min(1, boundaries[index].p))
       const outLayer = layers[slot.out]
       const inLayer = layers[slot.in]
-      const shift = shiftPx()
-      flow.style.setProperty('--scene-shift', `${shift}px`)
+      flow.style.setProperty('--scene-shift', `${shift.toFixed(1)}px`)
 
       if (reduced) {
         outLayer.style.transform = 'none'
         inLayer.style.transform = 'none'
-        outLayer.style.filter = 'none'
-        inLayer.style.filter = 'none'
         outLayer.style.opacity = p < 0.5 ? '1' : '0'
         inLayer.style.opacity = p < 0.5 ? '0' : '1'
         return
@@ -329,48 +337,80 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
 
       // One progress value drives both paintings: the old one recedes toward
       // you as the next rises into place, so the journey reads as one flight.
-      outLayer.style.transform = `translate3d(0, ${shift}px, 0) translateY(${(-6 * p).toFixed(2)}%) scale(${(
+      outLayer.style.transform = `translate3d(0, ${shift.toFixed(1)}px, 0) translateY(${(-6 * p).toFixed(2)}%) scale(${(
         1 + 0.35 * p
       ).toFixed(4)})`
-      inLayer.style.transform = `translate3d(0, ${shift}px, 0) translateY(${(6 * (1 - p)).toFixed(2)}%) scale(${(
+      inLayer.style.transform = `translate3d(0, ${shift.toFixed(1)}px, 0) translateY(${(6 * (1 - p)).toFixed(2)}%) scale(${(
         0.82 + 0.18 * p
       ).toFixed(4)})`
       outLayer.style.opacity = `${(1 - p).toFixed(3)}`
       inLayer.style.opacity = `${p.toFixed(3)}`
-      // Blur is costly, so it only appears late and short, on the receding art.
-      const blur = p > 0.6 ? ((p - 0.6) / 0.4) * 6 : 0
-      outLayer.style.filter = blur > 0.04 ? `blur(${blur.toFixed(2)}px)` : 'none'
-      inLayer.style.filter = 'none'
     }
 
     /* -------------------------------------------------- scroll progress */
 
-    let smooth = false
     let disposed = false
     let frameId = 0
+    let resizeTimer = 0
 
-    /** Raw mapping, used until the scrubbed timeline takes over. */
-    const measure = () => {
-      const vh = window.innerHeight || 1
+    /** Every layout read happens here, before a single style is written. */
+    const readScroll = () => {
+      const height = window.innerHeight || 1
+      const y = window.scrollY
       boundaries.forEach((boundary) => {
-        const top = boundary.section.getBoundingClientRect().top
-        boundary.p = Math.max(0, Math.min(1, (vh * 0.95 - top) / (vh * 0.83)))
+        const info = tops.get(boundary.section.id)
+        if (!info) return
+        const top = info.top - y
+        boundary.target = Math.max(0, Math.min(1, (height * 0.95 - top) / (height * 0.83)))
       })
+      const current = tops.get(activeSection)
+      if (current) {
+        const progress = (height * 0.5 - (current.top - y)) / Math.max(1, current.height)
+        shiftTarget = Math.round((Math.max(0, Math.min(1, progress)) - 0.5) * 54)
+      }
     }
 
-    const onScroll = () => {
-      if (frameId) return
-      frameId = window.requestAnimationFrame(() => {
-        frameId = 0
-        if (!smooth) measure()
-        render()
+    /** One easing loop: it runs only while something is still settling. */
+    const step = () => {
+      frameId = 0
+      if (disposed) return
+      readScroll()
+      let moving = false
+      boundaries.forEach((boundary) => {
+        const delta = boundary.target - boundary.p
+        if (reduced || Math.abs(delta) < 0.0004) {
+          boundary.p = boundary.target
+          return
+        }
+        boundary.p += delta * 0.16
+        moving = true
       })
+      const shiftDelta = shiftTarget - shift
+      if (reduced || Math.abs(shiftDelta) < 0.05) shift = shiftTarget
+      else {
+        shift += shiftDelta * 0.16
+        moving = true
+      }
+      paint()
+      if (moving) frameId = window.requestAnimationFrame(step)
+    }
+
+    const kick = () => {
+      if (frameId || disposed) return
+      frameId = window.requestAnimationFrame(step)
     }
 
     const onResize = () => {
+      view.width = flow.clientWidth
+      view.height = flow.clientHeight
       layers.forEach(fitFrame)
-      if (!smooth) measure()
-      render()
+      measureSections()
+      kick()
+    }
+
+    const onResizeSoon = () => {
+      window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(onResize, 120)
     }
 
     const observer = new IntersectionObserver(
@@ -378,7 +418,7 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return
           activeSection = entry.target.id
-          render()
+          kick()
         })
       },
       { rootMargin: '-45% 0px -50% 0px', threshold: 0 },
@@ -387,54 +427,19 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
     sectionEls.forEach((element) => observer.observe(element))
 
     ensurePair(0)
+    measureSections()
     layers.forEach(fitFrame)
-    measure()
-    render()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onResize)
-
-    // The scrubbed timeline is the only smoothing source: a quick flick of the
-    // wheel still settles the world over roughly a second, with no scroll hijack.
-    let killTweens: (() => void) | undefined
-    const setupScroll = async () => {
-      if (reduced || !boundaries.length) return
-      const [{ default: gsap }, { ScrollTrigger }] = await Promise.all([
-        import('gsap'),
-        import('gsap/ScrollTrigger'),
-      ])
-      if (disposed) return
-      gsap.registerPlugin(ScrollTrigger)
-
-      const tweens = boundaries.map((boundary) => {
-        const state = { p: 0 }
-        return gsap.to(state, {
-          p: 1,
-          ease: 'none',
-          scrollTrigger: {
-            trigger: boundary.section,
-            start: 'top 95%',
-            end: 'top 12%',
-            scrub: 0.9,
-            invalidateOnRefresh: true,
-          },
-          onUpdate: () => {
-            boundary.p = state.p
-            render()
-          },
+    kick()
+    window.addEventListener('scroll', kick, { passive: true })
+    window.addEventListener('resize', onResizeSoon)
+    if (document.fonts?.ready) {
+      document.fonts.ready
+        .then(() => {
+          measureSections()
+          kick()
         })
-      })
-
-      smooth = true
-      ScrollTrigger.refresh()
-      render()
-      killTweens = () => {
-        tweens.forEach((tween) => {
-          tween.scrollTrigger?.kill()
-          tween.kill()
-        })
-      }
+        .catch(() => undefined)
     }
-    void setupScroll()
 
     const hero = images[0]
     const announce = () => readyRef.current?.()
@@ -444,10 +449,11 @@ export function SceneFlow({ onReady }: { onReady?: () => void }) {
     return () => {
       disposed = true
       observer.disconnect()
-      window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onResize)
+      hero.removeEventListener('load', announce)
+      window.removeEventListener('scroll', kick)
+      window.removeEventListener('resize', onResizeSoon)
+      window.clearTimeout(resizeTimer)
       if (frameId) window.cancelAnimationFrame(frameId)
-      killTweens?.()
     }
   }, [])
 
