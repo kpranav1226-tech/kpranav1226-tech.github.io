@@ -36,48 +36,106 @@ export function Loader({ progress }: { progress: number }) {
 
 export function MusicPlayer() {
   const ambient = useRef<Ambient | null>(null)
-  const [playing, setPlaying] = useState(false)
+  const mutedRef = useRef(false)
+  const volumeRef = useRef(0.5)
   const [muted, setMuted] = useState(false)
-  const [volume, setVolume] = useState(0.55)
+  const [volume, setVolume] = useState(0.5)
+  const [live, setLive] = useState(false)
 
   useEffect(() => {
-    ambient.current = new Ambient()
-    return () => ambient.current?.stop()
+    const engine = new Ambient()
+    ambient.current = engine
+    engine.setVolume(volumeRef.current)
+
+    let active = true
+    const begin = () => {
+      void engine.start().then((running) => {
+        if (active && running) setLive(true)
+      })
+    }
+
+    // Starts on its own; browsers hold audio back until the visitor's first
+    // gesture, so the same call runs again on the first tap, key or click.
+    begin()
+    const unlock = () => {
+      if (!mutedRef.current) begin()
+    }
+    const gestures: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart', 'click']
+    gestures.forEach((event) => window.addEventListener(event, unlock, { passive: true }))
+
+    const onVisibility = () => {
+      if (document.hidden || mutedRef.current) {
+        engine.setVolume(0)
+      } else {
+        engine.setVolume(volumeRef.current)
+        begin()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      active = false
+      gestures.forEach((event) => window.removeEventListener(event, unlock))
+      document.removeEventListener('visibilitychange', onVisibility)
+      engine.stop()
+      ambient.current = null
+    }
   }, [])
 
-  const play = async () => {
+  const toggleMute = () => {
+    const next = !mutedRef.current
+    mutedRef.current = next
+    setMuted(next)
     const engine = ambient.current
     if (!engine) return
-    await engine.start()
-    engine.setVolume(muted ? 0 : volume)
-    setPlaying(true)
+    if (next) {
+      engine.setVolume(0)
+      return
+    }
+    engine.setVolume(volumeRef.current)
+    void engine.start().then((running) => setLive(running))
   }
 
-  const pause = () => {
-    ambient.current?.stop()
-    setPlaying(false)
+  const changeVolume = (next: number) => {
+    volumeRef.current = next
+    setVolume(next)
+    const engine = ambient.current
+    if (!engine) return
+    if (next === 0) {
+      mutedRef.current = true
+      setMuted(true)
+      engine.setVolume(0)
+      return
+    }
+    if (mutedRef.current) {
+      mutedRef.current = false
+      setMuted(false)
+    }
+    engine.setVolume(next)
+    void engine.start().then((running) => setLive(running))
   }
 
-  const toggleMute = () => {
-    const next = !muted
-    setMuted(next)
-    ambient.current?.setVolume(next ? 0 : volume)
-  }
+  const label = muted ? 'Sound muted' : live ? 'Waterfall · birds' : 'Tap for sound'
 
   return (
-    <div className="music-player" aria-label="Ambient soundtrack">
+    <div
+      className={`music-player${muted ? ' is-muted' : ''}${!live && !muted ? ' needs-tap' : ''}`}
+      aria-label="Nature sounds"
+    >
       <button
         type="button"
         className="icon-btn"
-        onClick={() => (playing ? pause() : void play())}
-        aria-label={playing ? 'Pause ambient soundtrack' : 'Play ambient soundtrack'}
-        aria-pressed={playing}
+        onClick={toggleMute}
+        aria-label={muted ? 'Unmute nature sounds' : 'Mute nature sounds'}
+        aria-pressed={muted}
       >
-        <Icon name={playing ? 'pause' : 'play'} size={15} />
+        <Icon name={muted ? 'volume-off' : 'volume'} size={16} />
       </button>
 
       <div className="music-meta">
-        <span className="music-label">{playing ? 'Ambient · playing' : 'Ambient · off'}</span>
+        <span className="music-label" role="status" aria-live="polite">
+          {label}
+        </span>
         <input
           className="volume"
           type="range"
@@ -85,26 +143,10 @@ export function MusicPlayer() {
           max={1}
           step={0.01}
           value={muted ? 0 : volume}
-          onChange={(event) => {
-            const next = Number(event.target.value)
-            setVolume(next)
-            setMuted(next === 0)
-            ambient.current?.setVolume(next)
-          }}
-          aria-label="Soundtrack volume"
-          disabled={!playing}
+          onChange={(event) => changeVolume(Number(event.target.value))}
+          aria-label="Nature sound volume"
         />
       </div>
-
-      <button
-        type="button"
-        className="icon-btn"
-        onClick={toggleMute}
-        aria-label={muted ? 'Unmute soundtrack' : 'Mute soundtrack'}
-        aria-pressed={muted}
-      >
-        <Icon name={muted ? 'volume-off' : 'volume'} size={16} />
-      </button>
     </div>
   )
 }
