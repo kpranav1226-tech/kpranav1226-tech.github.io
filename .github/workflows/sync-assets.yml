@@ -1,8 +1,7 @@
 name: Sync source assets
 
-# One-off helper: copies the five scene images from the published site into
-# public/scenes and restores package-lock.json from its compressed form.
-# Delete this workflow (and package-lock.json.b64) once the commit lands.
+# One-off helper: restores package-lock.json as plain JSON from its compressed
+# form, then removes itself from the repository.
 
 on:
   workflow_dispatch:
@@ -11,35 +10,26 @@ permissions:
   contents: write
 
 jobs:
-  sync:
+  fix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Download scene artwork
+      - name: Decompress lockfile
         run: |
-          mkdir -p public/scenes
-          base="https://k-pranav-digital-world-l65015.freebuff.site/scenes"
-          for f in 01-home-hero 02-projects 03-skills 04-about 05-contact; do
-            curl -fsSL "$base/$f.jpg" -o "public/scenes/$f.jpg"
-            test -s "public/scenes/$f.jpg"
-          done
-          md5sum public/scenes/*.jpg
-          ls -l public/scenes
-
-      - name: Restore dependency lockfile
-        run: |
-          base64 -d package-lock.json.b64 > package-lock.json
-          rm package-lock.json.b64
+          gzip -dc package-lock.json > /tmp/package-lock.json
+          mv /tmp/package-lock.json package-lock.json
           md5sum package-lock.json
+          test "$(md5sum package-lock.json | cut -d' ' -f1)" = "2d535ccbbe437cafc4ecd5b278f0f32f"
           head -3 package-lock.json
 
-      - name: Commit
+      - name: Commit and retire this workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Add scene artwork and dependency lockfile"
+          git rm .github/workflows/sync-assets.yml
+          git add package-lock.json
+          git commit -m "Store the dependency lockfile as plain JSON"
           git push
