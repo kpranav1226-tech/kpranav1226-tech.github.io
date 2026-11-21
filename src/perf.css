@@ -1,0 +1,68 @@
+/* ==========================================================================
+   Performance pass — imported last, so it only trades away what made the page
+   stutter. A real backdrop blur re-blurs the moving painting every single
+   frame, for every panel on screen; that is what made scrolling feel heavy.
+   The panels keep their translucent fill, borders and reflections, and only
+   the fixed chrome (nav, menus, dialogs) still frosts, since nothing scrolls
+   behind it.
+   ========================================================================== */
+
+.panel,
+.glass,
+.hero-panel,
+.card,
+.skill-group,
+.stat,
+.timeline-item,
+.contact-link,
+.about-note,
+.empty,
+.eyebrow,
+.chip,
+.card-tag,
+.stack span,
+.btn.primary,
+.btn.ghost,
+.nav-cta,
+.icon-btn,
+.owner-link,
+.form-status,
+.input,
+textarea.input,
+.close-btn,
+.undo-toast,
+.back-to-top,
+.music-player,
+.profile-frame,
+.cert-card,
+.project-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Scene motion that used to cost a repaint on every frame. */
+.scene-layer {
+  will-change: opacity, transform;
+}
+
+.scene-fall::before,
+.scene-spray {
+  filter: none;
+}
+
+.scene-cloud.is-far {
+  filter: none;
+  opacity: 0.16;
+}
+
+/* One drift per cloud is enough; the breathing copy doubled the layers. */
+.scene-cloud::after {
+  animation: none;
+}
+
+/* A softer, calmer spray reads the same without a live blur filter. */
+.scene-spray {
+  height: 12px;
+  opacity: 0.5;
+  animation-duration: 6s;
+}
