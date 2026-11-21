@@ -196,7 +196,7 @@ button {
     radial-gradient(30% 55% at 45% 42%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 72%),
     radial-gradient(34% 60% at 67% 60%, rgba(255, 242, 230, 0.6), rgba(255, 242, 230, 0) 70%),
     radial-gradient(26% 50% at 87% 46%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 72%);
-  opacity: 0.28;
+  opacity: 0.44;
   animation-name: cloud-drift;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
@@ -204,10 +204,10 @@ button {
 
 @keyframes cloud-drift {
   from {
-    transform: translate3d(-5%, 0, 0) scale(1.02);
+    transform: translate3d(-9%, 0, 0) scale(1.02);
   }
   to {
-    transform: translate3d(5%, 0.6%, 0) scale(1.08);
+    transform: translate3d(9%, 0.8%, 0) scale(1.13);
   }
 }
 
@@ -216,7 +216,7 @@ button {
   display: block;
   overflow: hidden;
   border-radius: 50%;
-  opacity: 0.42;
+  opacity: 0.66;
   -webkit-mask-image: radial-gradient(58% 46% at 50% 42%, #000 46%, transparent 100%);
   mask-image: radial-gradient(58% 46% at 50% 42%, #000 46%, transparent 100%);
 }
@@ -232,12 +232,12 @@ button {
   background-image: repeating-linear-gradient(
     180deg,
     rgba(255, 255, 255, 0) 0px,
-    rgba(255, 255, 255, 0.42) 7px,
-    rgba(236, 248, 255, 0.12) 15px,
+    rgba(255, 255, 255, 0.68) 7px,
+    rgba(236, 248, 255, 0.2) 15px,
     rgba(255, 255, 255, 0) 24px
   );
   background-size: 100% 24px;
-  animation: fall-flow 1.15s linear infinite;
+  animation: fall-flow 0.9s linear infinite;
   animation-delay: var(--fall-delay, 0s);
   will-change: transform;
 }
