@@ -104,9 +104,8 @@ button {
   overflow: hidden;
   opacity: 0;
   z-index: 1;
-  transform: translate3d(0, var(--scene-shift), 0);
-  transition: opacity 1.35s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: opacity, transform;
+  /* Transform and opacity are written per scroll frame by SceneFlow. */
+  will-change: opacity, transform, filter;
 }
 
 .scene-layer.is-visible {
@@ -158,7 +157,9 @@ button {
 
 /* Only the scene on screen animates; the rest sleep instead of burning frames. */
 .scene-fx > *,
-.scene-fx > *::after {
+.scene-fx > *::before,
+.scene-fx > *::after,
+.scene-fx > * > i {
   animation-play-state: paused;
 }
 
@@ -177,11 +178,21 @@ button {
 .scene-layer[data-scene='skills'] .fx-skills > *,
 .scene-layer[data-scene='about'] .fx-about > *,
 .scene-layer[data-scene='contact'] .fx-contact > *,
+.scene-layer[data-scene='home'] .fx-home > *::before,
+.scene-layer[data-scene='projects'] .fx-projects > *::before,
+.scene-layer[data-scene='skills'] .fx-skills > *::before,
+.scene-layer[data-scene='about'] .fx-about > *::before,
+.scene-layer[data-scene='contact'] .fx-contact > *::before,
 .scene-layer[data-scene='home'] .fx-home > *::after,
 .scene-layer[data-scene='projects'] .fx-projects > *::after,
 .scene-layer[data-scene='skills'] .fx-skills > *::after,
 .scene-layer[data-scene='about'] .fx-about > *::after,
-.scene-layer[data-scene='contact'] .fx-contact > *::after {
+.scene-layer[data-scene='contact'] .fx-contact > *::after,
+.scene-layer[data-scene='home'] .fx-home > * > i,
+.scene-layer[data-scene='projects'] .fx-projects > * > i,
+.scene-layer[data-scene='skills'] .fx-skills > * > i,
+.scene-layer[data-scene='about'] .fx-about > * > i,
+.scene-layer[data-scene='contact'] .fx-contact > * > i {
   animation-play-state: running;
 }
 
@@ -211,14 +222,97 @@ button {
   }
 }
 
+/* The second band is smaller, softer and runs against the first. */
+.scene-cloud.is-far {
+  opacity: 0.2;
+  filter: blur(1px);
+}
+
+/* A slow vertical breath, so even a still screen has life in the sky. */
+.scene-cloud::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  opacity: 0.55;
+  animation: cloud-breath 26s ease-in-out infinite alternate;
+}
+
+@keyframes cloud-breath {
+  from {
+    transform: translate3d(0, -1.5%, 0);
+  }
+  to {
+    transform: translate3d(0, 1.5%, 0);
+  }
+}
+
 .scene-fall {
   position: absolute;
   display: block;
   overflow: hidden;
   border-radius: 50%;
   opacity: 0.66;
-  -webkit-mask-image: radial-gradient(58% 46% at 50% 42%, #000 46%, transparent 100%);
-  mask-image: radial-gradient(58% 46% at 50% 42%, #000 46%, transparent 100%);
+  -webkit-mask-image: radial-gradient(58% 62% at 50% 38%, #000 42%, transparent 100%);
+  mask-image: radial-gradient(58% 62% at 50% 38%, #000 42%, transparent 100%);
+}
+
+/* A slower, wider band behind the fast streak gives the water depth. */
+.scene-fall::before {
+  content: '';
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  top: -46px;
+  bottom: 0;
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0px,
+    rgba(226, 244, 255, 0.5) 20px,
+    rgba(255, 255, 255, 0) 46px
+  );
+  background-size: 100% 46px;
+  opacity: 0.5;
+  filter: blur(0.5px);
+  animation: fall-flow-wide 2.1s linear infinite;
+  animation-delay: var(--fall-delay, 0s);
+  will-change: transform;
+}
+
+@keyframes fall-flow-wide {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 46px, 0);
+  }
+}
+
+/* Spray where the water meets the cloud below. */
+.scene-spray {
+  position: absolute;
+  left: 50%;
+  bottom: 3%;
+  width: 190%;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0) 70%);
+  filter: blur(6px);
+  transform: translateX(-50%);
+  animation: fall-spray 4s ease-in-out infinite;
+  animation-delay: var(--fall-delay, 0s);
+}
+
+@keyframes fall-spray {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateX(-50%) scaleX(0.9);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateX(-50%) scaleX(1.12);
+  }
 }
 
 /* Painted once, then slid on the compositor instead of repainting gradients. */
@@ -904,6 +998,7 @@ button {
 }
 
 /* ---------- cards / grids ---------- */
+
 .grid {
   display: grid;
   gap: 18px;
