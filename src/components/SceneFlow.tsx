@@ -31,7 +31,11 @@ const SCENES: Scene[] = [
       { y: 0.64, h: 0.2, duration: 74, reverse: true },
       { y: 0.8, h: 0.24, duration: 92 },
     ],
-    falls: [],
+    falls: [
+      { x: 0.352, w: 0.022, y: 0.63, h: 0.32 },
+      { x: 0.435, w: 0.04, y: 0.645, h: 0.31 },
+      { x: 0.631, w: 0.027, y: 0.655, h: 0.26 },
+    ],
   },
   {
     id: 'projects',
