@@ -1,7 +1,6 @@
 name: Sync source assets
 
-# One-off helper: restores package-lock.json as plain JSON from its compressed
-# form, then removes itself from the repository.
+# One-off helper: rebuilds package-lock.json from its verified transport chunks.
 
 on:
   workflow_dispatch:
@@ -10,26 +9,25 @@ permissions:
   contents: write
 
 jobs:
-  fix:
+  assemble:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Decompress lockfile
+      - name: Assemble lockfile
         run: |
-          gzip -dc package-lock.json > /tmp/package-lock.json
-          mv /tmp/package-lock.json package-lock.json
+          cat lock.part1 lock.part2 lock.part3 | base64 -d | gunzip > package-lock.json
           md5sum package-lock.json
           test "$(md5sum package-lock.json | cut -d' ' -f1)" = "2d535ccbbe437cafc4ecd5b278f0f32f"
           head -3 package-lock.json
+          rm lock.part1 lock.part2 lock.part3
 
-      - name: Commit and retire this workflow
+      - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/sync-assets.yml
-          git add package-lock.json
-          git commit -m "Store the dependency lockfile as plain JSON"
+          git add -A
+          git commit -m "Store the real dependency lockfile"
           git push
