@@ -21,7 +21,7 @@ jobs:
       - name: Download scene artwork
         run: |
           mkdir -p public/scenes
-          base="https://kpranav1226-tech.github.io/scenes"
+          base="https://k-pranav-digital-world-l65015.freebuff.site/scenes"
           for f in 01-home-hero 02-projects 03-skills 04-about 05-contact; do
             curl -fsSL "$base/$f.jpg" -o "public/scenes/$f.jpg"
             test -s "public/scenes/$f.jpg"
