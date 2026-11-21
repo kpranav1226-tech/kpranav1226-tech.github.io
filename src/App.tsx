@@ -151,51 +151,53 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [])
 
-  /* ------------------------------------------------ reveal animations (gsap) */
+  /* -------------------------------------------- reveal animations (fade up) */
 
   useEffect(() => {
-    let cleanup: (() => void) | undefined
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const elements = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reducedMotion || typeof IntersectionObserver === 'undefined') return
 
-    if (reducedMotion) {
-      elements.forEach((element) => {
-        element.style.opacity = '1'
-        element.style.transform = 'none'
-      })
-      return
+    const fresh = elements.filter((element) => element.dataset.revealed !== 'true')
+    if (!fresh.length) return
+
+    // Each panel waits below its place, then the compositor fades it up. No
+    // scroll listener and no layout reads happen while the page moves.
+    fresh.forEach((element) => {
+      element.style.opacity = '0'
+      element.style.transform = 'translate3d(0, 30px, 0)'
+    })
+
+    const reveal = (element: HTMLElement) => {
+      element.dataset.revealed = 'true'
+      const animation = element.animate(
+        [
+          { opacity: 0, transform: 'translate3d(0, 30px, 0)' },
+          { opacity: 1, transform: 'translate3d(0, 0, 0)' },
+        ],
+        { duration: 720, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'forwards' },
+      )
+      animation.onfinish = () => {
+        element.style.opacity = ''
+        element.style.transform = ''
+        animation.cancel()
+      }
     }
 
-    void (async () => {
-      const [{ default: gsap }, { ScrollTrigger }] = await Promise.all([
-        import('gsap'),
-        import('gsap/ScrollTrigger'),
-      ])
-      gsap.registerPlugin(ScrollTrigger)
-      const tweens = elements
-        .filter((element) => element.getBoundingClientRect().top > window.innerHeight * 0.92)
-        .map((element) =>
-          gsap.fromTo(
-            element,
-            { y: 34, opacity: 0 },
-            {
-              y: 0,
-              opacity: 1,
-              duration: 0.9,
-              ease: 'power3.out',
-              scrollTrigger: { trigger: element, start: 'top 88%', once: true },
-            },
-          ),
-        )
-      cleanup = () => {
-        tweens.forEach((tween) => {
-          tween.scrollTrigger?.kill()
-          tween.kill()
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return
+          observer.unobserve(entry.target)
+          reveal(entry.target as HTMLElement)
         })
-      }
-    })()
+      },
+      { rootMargin: '0px 0px -10% 0px', threshold: 0.01 },
+    )
 
-    return () => cleanup?.()
+    fresh.forEach((element) => observer.observe(element))
+
+    return () => observer.disconnect()
   }, [content.projects.length, content.milestones.length, content.interests.length])
 
   const canEdit = owner
