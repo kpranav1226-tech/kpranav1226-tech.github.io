@@ -3,6 +3,7 @@ import App from './App'
 import './styles.css'
 import './glass.css'
 import './perf.css'
+import './sound-hint.css'
 
 const root = document.getElementById('root')
 if (root) createRoot(root).render(<App />)
