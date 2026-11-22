@@ -1,0 +1,63 @@
+/* ==========================================================================
+   "Tap to start the sound" hint.
+
+   Browsers keep audio silent until the visitor's first tap, so while the pill
+   is still waiting for one (.needs-tap) a small bubble above it says what the
+   tap will do. It is a pseudo-element, so the pill keeps exactly its own size,
+   and the hint disappears the moment sound actually starts.
+   ========================================================================== */
+
+.music-player.needs-tap::after {
+  content: 'Tap to hear the waterfall';
+  position: absolute;
+  right: 2px;
+  bottom: calc(100% + 14px);
+  width: max-content;
+  max-width: min(232px, calc(100vw - 40px));
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  text-align: left;
+  white-space: normal;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(16, 20, 46, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow:
+    0 12px 28px rgba(8, 12, 32, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+  animation: hint-in 0.55s ease-out 0.35s both;
+}
+
+/* Little tail pointing back at the speaker button. */
+.music-player.needs-tap::before {
+  content: '';
+  position: absolute;
+  right: 26px;
+  bottom: calc(100% + 4px);
+  border: 6px solid transparent;
+  border-bottom: 0;
+  border-top-color: rgba(20, 24, 52, 0.7);
+  pointer-events: none;
+  animation: hint-in 0.55s ease-out 0.35s both;
+}
+
+@keyframes hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-player.needs-tap::after,
+  .music-player.needs-tap::before {
+    animation: none;
+  }
+}
